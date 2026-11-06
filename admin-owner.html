@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Admin Owner tenant-scoped banking and brokerage portal.">
+  <title>Admin Owner | Metro Platform</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8edf7;background:#080e18;--panel:#111b2b;--line:#24334a;--muted:#94a3b8;--accent:#65b5ff;--good:#58d6a1;--bad:#ff8490}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 85% -20%,#12345a 0,transparent 42%),#080e18;min-height:100vh}button,input{font:inherit}button{cursor:pointer}.shell{width:min(1120px,calc(100% - 32px));margin:auto;padding:30px 0 56px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}.brand{display:flex;gap:13px;align-items:center}.mark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:#287bc3;font-weight:800}.title{font-size:21px;margin:0}.subtitle,.muted{color:var(--muted);font-size:13px;line-height:1.55}.subtitle{margin:5px 0 0}.badge{color:#a7d6ff;background:#112940;border:1px solid #244c70;padding:7px 11px;border-radius:30px;font-size:11px;font-weight:700}.panel{background:linear-gradient(145deg,#121d2f,#0e1725);border:1px solid var(--line);border-radius:16px;padding:20px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.span-6{grid-column:span 6}.span-12{grid-column:span 12}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.section-head h2{font-size:15px;margin:0}.button{border:1px solid #33445f;background:#17243a;color:#e7edf7;padding:9px 12px;border-radius:9px;font-weight:700;font-size:12px}.button.primary{background:#277cc1;border-color:#277cc1;color:white}.button.approve{border-color:#205440;color:#8ef0c3}.button.decline{border-color:#673943;color:#ffb1b8}.button:disabled{opacity:.55}.field{display:grid;gap:6px;margin-bottom:12px}.field label{font-size:12px;color:#b9c5d8}.field input{width:100%;padding:11px;border:1px solid #2b3a54;border-radius:9px;background:#0b1220;color:#f0f3f9}.field input:focus{outline:2px solid #3c8ec7}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:540px}td,th{text-align:left;padding:11px 8px;border-bottom:1px solid var(--line);font-size:12px}th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}.status{min-height:20px;color:var(--muted);font-size:12px}.status.error{color:var(--bad)}.status.success{color:var(--good)}.hidden{display:none!important}.notice{background:#20251d;border:1px solid #455338;padding:12px;border-radius:10px;color:#c7e2a8;font-size:12px}.review{border-bottom:1px solid var(--line);padding:13px 0}.review:last-child{border-bottom:0}.review pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1220;padding:10px;border-radius:8px;color:#cbd6e8;font-size:11px}.actions{display:flex;gap:7px}.login{max-width:620px}.token{font-family:ui-monospace,monospace}.small{font-size:11px}.empty{padding:10px 0;color:var(--muted);font-size:13px}@media(max-width:720px){.shell{width:calc(100% - 22px);padding-top:18px}.span-6{grid-column:span 12}.badge{display:none}.panel{padding:16px}.top{align-items:flex-start}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div class="brand"><div class="mark">AO</div><div><h1 class="title">Admin Owner Portal</h1><p class="subtitle">Your isolated tenant workspace</p></div></div><span class="badge">ADMIN OWNER</span></header>
+    <section id="login" class="panel login">
+      <h2 style="font-size:16px">Sign in</h2><p class="muted">Use a pre-issued Bearer JWT from your identity provider. Password sign-in is not configured in this portal.</p>
+      <form id="login-form">
+        <div class="field"><label for="token">Bearer access token</label><input id="token" class="token" type="password" autocomplete="off" required></div>
+        <button id="login-button" class="button primary">Verify access</button>
+      </form><p id="login-status" class="status" role="status" aria-live="polite"></p>
+    </section>
+    <section id="app" class="hidden">
+      <div class="row" style="margin-bottom:16px"><span id="identity" class="muted"></span><button id="reload" class="button right">Refresh data</button><button id="logout" class="button">Sign out</button></div>
+      <div class="notice" style="margin-bottom:16px">Banking and brokerage records are read-only here. Deposit routes are displayed from tenant data; editing routes, moving funds, and placing trades are not enabled.</div>
+      <div class="grid">
+        <section class="panel span-6"><div class="section-head"><h2>Tenant</h2></div><div id="tenant-card" class="muted">Loading...</div></section>
+        <section class="panel span-6"><div class="section-head"><h2>Banking balances</h2></div><div id="balances" class="muted">Loading...</div></section>
+        <section class="panel span-6"><div class="section-head"><h2>Deposit routes</h2></div><div id="routes" class="muted">Loading...</div></section>
+        <section class="panel span-6"><div class="section-head"><h2>Brokerage accounts</h2></div><div id="accounts" class="muted">Loading...</div></section>
+        <section class="panel span-12"><div class="section-head"><h2>Pending management reviews</h2></div><div id="reviews" class="muted">Loading...</div><p id="action-status" class="status" role="status" aria-live="polite"></p></section>
+      </div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const $ = (s) => document.querySelector(s), key = "metro.admin-owner.token";
+      let token = "", base = location.origin;
+      const status = (el, text, type = "") => { el.textContent = text; el.className = `status ${type}`; };
+      const api = async (path, options = {}) => {
+        const response = await fetch(`${base}${path}`, { ...options, headers: { authorization: `Bearer ${token}`, ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers } });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+        return body;
+      };
+      const table = (container, headers, rows) => {
+        container.replaceChildren();
+        if (!rows.length) { container.textContent = "No records available."; return; }
+        const wrap = document.createElement("div"); wrap.className = "table-wrap";
+        const t = document.createElement("table"), head = document.createElement("thead"), hr = document.createElement("tr");
+        headers.forEach((v) => { const th = document.createElement("th"); th.textContent = v; hr.append(th); }); head.append(hr); t.append(head);
+        const body = document.createElement("tbody");
+        rows.forEach((values) => { const tr = document.createElement("tr"); values.forEach((v) => { const td = document.createElement("td"); td.textContent = v == null ? "-" : String(v); tr.append(td); }); body.append(tr); });
+        t.append(body); wrap.append(t); container.append(wrap);
+      };
+      async function load() {
+        const [tenants, balances, routes, accounts, reviews] = await Promise.all([
+          api("/api/tenants?limit=100"), api("/api/banking/balance?limit=100"),
+          api("/api/banking/deposit-routes?limit=100"), api("/api/brokerage/accounts?limit=100"),
+          api("/api/management/pending-reviews?limit=100"),
+        ]);
+        table($("#tenant-card"), ["Name","ID","Status"], (tenants.data || []).map(x => [x.tenant_name,x.tenant_id,x.status]));
+        table($("#balances"), ["Ledger","Currency","Balance (minor units)"], (balances.data || []).map(x => [x.ledger_id,x.currency,x.balance_minor]));
+        table($("#routes"), ["Asset","Network","Ledger","Address","Status"], (routes.data || []).map(x => [x.asset,x.network,x.ledger_id,x.deposit_address,x.status]));
+        table($("#accounts"), ["Account","Provider","Currency","Status"], (accounts.data || []).map(x => [x.brokerage_account_id,x.provider,x.currency,x.status]));
+        const list = $("#reviews"); list.replaceChildren();
+        if (!(reviews.data || []).length) list.textContent = "No pending reviews.";
+        for (const review of reviews.data || []) {
+          const item = document.createElement("article"); item.className = "review";
+          const title = document.createElement("strong"); title.textContent = `${review.request_type} · ${review.review_level} · ${review.requester_user_id}`; item.append(title);
+          const details = document.createElement("pre"); details.textContent = JSON.stringify(JSON.parse(review.payload_json), null, 2); item.append(details);
+          const actions = document.createElement("div"); actions.className = "actions";
+          for (const action of ["APPROVE","DECLINE"]) {
+            const button = document.createElement("button"); button.type = "button"; button.className = `button ${action === "APPROVE" ? "approve" : "decline"}`; button.textContent = action;
+            button.addEventListener("click", async () => { button.disabled = true; try { const result = await api("/api/management/review-action",{method:"POST",body:JSON.stringify({review_id:review.queue_id,action})}); status($("#action-status"),`${result.data.status}. No financial execution occurred.`,"success"); await load(); } catch(error) { status($("#action-status"),error.message,"error"); button.disabled = false; } });
+            actions.append(button);
+          }
+          item.append(actions); list.append(item);
+        }
+      }
+      async function login(candidate) {
+        token = candidate;
+        const me = await api("/api/auth/me");
+        if (me.data?.role !== "ADMIN_OWNER") throw new Error("This portal requires the ADMIN_OWNER role.");
+        $("#identity").textContent = `Signed in: ${me.data.user_id} · ${me.data.tenant_id}`;
+        await load();
+        $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
+      }
+      $("#login-form").addEventListener("submit", async (event) => { event.preventDefault(); const button=$("#login-button");button.disabled=true;status($("#login-status"),"Verifying access...");try{await login($("#token").value.trim());sessionStorage.setItem(key,token);}catch(e){token="";status($("#login-status"),e.message,"error");}finally{button.disabled=false;} });
+      $("#reload").addEventListener("click",async()=>{try{await load();status($("#action-status"),"Data refreshed.","success");}catch(e){status($("#action-status"),e.message,"error");}});
+      $("#logout").addEventListener("click",()=>{sessionStorage.removeItem(key);token="";$("#app").classList.add("hidden");$("#login").classList.remove("hidden");$("#token").value="";});
+      const cached=sessionStorage.getItem(key);if(cached)login(cached).catch(e=>{sessionStorage.removeItem(key);token="";$("#login").classList.remove("hidden");$("#app").classList.add("hidden");status($("#login-status"),e.message,"error");});
+    })();
+  </script>
+</body>
+</html>
