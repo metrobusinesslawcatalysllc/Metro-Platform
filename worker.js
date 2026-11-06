@@ -1,44 +1,154 @@
-const JSON_HEADERS = {
+// Control-plane gateway.
+// Bindings: CONTROL_DB (central registry D1), DISPATCHER (Workers for
+// Platforms dispatch namespace), AUTH_JWT_SECRET, AUTH_JWT_ISSUER,
+// AUTH_JWT_AUDIENCE, and optional comma-separated ALLOWED_ORIGINS.
+// Each tenant's Worker receives only its own tenant D1 binding.
+const HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
   "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
 };
 
-const REST_RESOURCES = new Set([
-  "profiles",
-  "accounts",
-  "positions",
-  "deposit_vaults",
-  "transfers",
-]);
+const STAFF_ROLES = new Set(["SUPER_MASTER", "ADMIN_OWNER"]);
+const MEMBER_ROLES = new Set(["SUBADMIN", "MANAGER", "CLIENT"]);
+const STATUSES = new Set(["ACTIVE", "SUSPENDED", "CLOSED"]);
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const MAX_LIMIT = 100;
+const MAX_OFFSET = 10000;
+const MAX_REQUEST_BODY_BYTES = 8192;
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/;
-const MAX_TRANSFER_BODY_BYTES = 4096;
+class HttpError extends Error {
+  constructor(status, message, headers = {}) {
+    super(message);
+    this.status = status;
+    this.headers = headers;
+  }
+}
 
-function jsonResponse(body, status = 200, headers = {}) {
-  return new Response(JSON.stringify(body), {
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: { ...JSON_HEADERS, ...headers },
+    headers: { ...HEADERS, ...headers },
   });
+}
+
+function decodeBase64Url(value) {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid base64url");
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const decoded = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+
+function decodeJwtPart(value) {
+  return JSON.parse(
+    new TextDecoder("utf-8", { fatal: true }).decode(decodeBase64Url(value)),
+  );
+}
+
+async function authenticate(request, env) {
+  const match = /^Bearer ([^\s]{1,8192})$/i.exec(
+    request.headers.get("Authorization") || "",
+  );
+  if (!match) throw new HttpError(401, "Authentication required");
+
+  if (
+    typeof env.AUTH_JWT_SECRET !== "string" ||
+    new TextEncoder().encode(env.AUTH_JWT_SECRET).byteLength < 32 ||
+    typeof env.AUTH_JWT_ISSUER !== "string" ||
+    !env.AUTH_JWT_ISSUER ||
+    typeof env.AUTH_JWT_AUDIENCE !== "string" ||
+    !env.AUTH_JWT_AUDIENCE
+  ) {
+    throw new HttpError(503, "Authentication is not configured");
+  }
+
+  const parts = match[1].split(".");
+  if (parts.length !== 3) throw new HttpError(401, "Invalid or expired token");
+
+  let header;
+  let claims;
+  let signature;
+  try {
+    header = decodeJwtPart(parts[0]);
+    claims = decodeJwtPart(parts[1]);
+    signature = decodeBase64Url(parts[2]);
+  } catch {
+    throw new HttpError(401, "Invalid or expired token");
+  }
+
+  if (
+    !header ||
+    header.alg !== "HS256" ||
+    header.typ !== "JWT" ||
+    !claims ||
+    typeof claims !== "object" ||
+    typeof claims.sub !== "string" ||
+    !ID_PATTERN.test(claims.sub) ||
+    claims.iss !== env.AUTH_JWT_ISSUER ||
+    !(claims.aud === env.AUTH_JWT_AUDIENCE ||
+      (Array.isArray(claims.aud) && claims.aud.includes(env.AUTH_JWT_AUDIENCE))) ||
+    !Number.isSafeInteger(claims.exp) ||
+    !Number.isSafeInteger(claims.iat)
+  ) {
+    throw new HttpError(401, "Invalid or expired token");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    claims.exp <= now ||
+    claims.iat > now + 60 ||
+    claims.exp <= claims.iat ||
+    claims.exp - claims.iat > 3600 ||
+    (claims.nbf !== undefined &&
+      (!Number.isSafeInteger(claims.nbf) || claims.nbf > now))
+  ) {
+    throw new HttpError(401, "Invalid or expired token");
+  }
+
+  let valid;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(env.AUTH_JWT_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signature,
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+  } catch {
+    throw new HttpError(401, "Invalid or expired token");
+  }
+  if (!valid) throw new HttpError(401, "Invalid or expired token");
+  return claims.sub;
+}
+
+function database(env) {
+  if (!env.CONTROL_DB || typeof env.CONTROL_DB.prepare !== "function") {
+    throw new HttpError(503, "Control database is not configured");
+  }
+  return env.CONTROL_DB;
 }
 
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin");
   if (!origin) return {};
-
   const allowedOrigins = (env.ALLOWED_ORIGINS || "")
     .split(",")
-    .map((value) => value.trim())
+    .map((originValue) => originValue.trim())
     .filter(Boolean);
-
-  if (!allowedOrigins.includes(origin)) return null;
-
+  if (!allowedOrigins.includes(origin)) {
+    throw new HttpError(403, "Origin is not allowed");
+  }
   return {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "authorization, content-type, idempotency-key",
+    "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type",
     "access-control-max-age": "600",
     vary: "Origin",
   };
@@ -49,8 +159,6 @@ function withHeaders(response, additions) {
   for (const [name, value] of Object.entries(additions)) {
     headers.set(name, value);
   }
-  headers.set("x-content-type-options", "nosniff");
-  headers.set("cache-control", "no-store");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -58,320 +166,371 @@ function withHeaders(response, additions) {
   });
 }
 
-async function authenticate(request, env) {
-  const authorization = request.headers.get("Authorization") || "";
-  const match = /^Bearer ([^\s]{1,8192})$/i.exec(authorization);
-  if (!match) return { response: jsonResponse({ error: "Authentication required" }, 401) };
+async function resolvePrincipal(userId, env) {
+  const db = database(env);
+  const operator = await db
+    .prepare(
+      `SELECT user_id, role, is_active
+       FROM platform_operators
+       WHERE user_id = ?
+       LIMIT 1`,
+    )
+    .bind(userId)
+    .first();
 
-  const baseUrl = getSupabaseUrl(env);
-  if (!baseUrl || !env.SUPABASE_ANON_KEY) {
-    return { response: jsonResponse({ error: "Supabase is not configured" }, 503) };
+  if (operator) {
+    if (operator.is_active !== 1 || !STAFF_ROLES.has(operator.role)) {
+      throw new HttpError(403, "Account is inactive or not authorized");
+    }
+    if (operator.role === "SUPER_MASTER") {
+      return { userId, role: operator.role, tenantId: null, branchId: null };
+    }
+
+    const tenant = await db
+      .prepare(
+        `SELECT tenant_id, status
+         FROM admin_tenants
+         WHERE admin_owner_user_id = ?
+         LIMIT 1`,
+      )
+      .bind(userId)
+      .first();
+    if (!tenant || tenant.status !== "ACTIVE") {
+      throw new HttpError(403, "Tenant is unavailable");
+    }
+    return {
+      userId,
+      role: operator.role,
+      tenantId: tenant.tenant_id,
+      branchId: null,
+    };
   }
 
-  let response;
-  try {
-    response = await fetch(new URL("/auth/v1/user", baseUrl), {
-      headers: {
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${match[1]}`,
-        Accept: "application/json",
-      },
-    });
-  } catch {
-    return { response: jsonResponse({ error: "Authentication service unavailable" }, 502) };
+  const membership = await db
+    .prepare(
+      `SELECT membership.tenant_id, membership.branch_id, membership.role,
+              membership.is_active, branch.status AS branch_status,
+              tenant.status AS tenant_status
+       FROM tenant_memberships AS membership
+       JOIN admin_tenants AS tenant ON tenant.tenant_id = membership.tenant_id
+       JOIN tenant_branches AS branch
+         ON branch.tenant_id = membership.tenant_id
+        AND branch.branch_id = membership.branch_id
+       WHERE membership.user_id = ?
+       LIMIT 1`,
+    )
+    .bind(userId)
+    .first();
+  if (!membership || membership.is_active !== 1 || !MEMBER_ROLES.has(membership.role)) {
+    throw new HttpError(403, "Account is not provisioned");
   }
+  if (membership.tenant_status !== "ACTIVE" || membership.branch_status !== "ACTIVE") {
+    throw new HttpError(403, "Tenant or branch is unavailable");
+  }
+  return {
+    userId,
+    role: membership.role,
+    tenantId: membership.tenant_id,
+    branchId: membership.branch_id,
+  };
+}
 
-  if (response.status === 401 || response.status === 403) {
-    return { response: jsonResponse({ error: "Invalid or expired session" }, 401) };
-  }
-  if (!response.ok) {
-    return { response: jsonResponse({ error: "Authentication service unavailable" }, 502) };
-  }
-
-  let user;
-  try {
-    user = await response.json();
-  } catch {
-    return { response: jsonResponse({ error: "Invalid authentication response" }, 502) };
-  }
-
+function pagination(url) {
+  const limit = url.searchParams.has("limit")
+    ? Number(url.searchParams.get("limit"))
+    : 50;
+  const offset = url.searchParams.has("offset")
+    ? Number(url.searchParams.get("offset"))
+    : 0;
   if (
-    !user ||
-    typeof user.id !== "string" ||
-    !UUID_PATTERN.test(user.id) ||
-    user.is_anonymous !== false
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_LIMIT ||
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset > MAX_OFFSET
   ) {
-    return { response: jsonResponse({ error: "A registered user session is required" }, 401) };
+    throw new HttpError(400, `limit must be 1-${MAX_LIMIT}; offset must be 0-${MAX_OFFSET}`);
   }
-
-  return { token: match[1], userId: user.id, baseUrl };
+  return { limit, offset };
 }
 
-function getSupabaseUrl(env) {
-  if (!env.SUPABASE_URL) return null;
-  try {
-    const url = new URL(env.SUPABASE_URL);
-    if (url.protocol !== "https:" || url.username || url.password) return null;
-    return url;
-  } catch {
-    return null;
+async function boundedRequestBody(request) {
+  if (!request.body) return undefined;
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
+    throw new HttpError(413, "Request body is too large");
   }
-}
-
-async function readJsonBody(request) {
-  const contentLength = Number(request.headers.get("Content-Length") || 0);
-  if (contentLength > MAX_TRANSFER_BODY_BYTES) {
-    return { error: jsonResponse({ error: "Request body is too large" }, 413) };
-  }
-  if (!request.body) return { error: jsonResponse({ error: "A JSON body is required" }, 400) };
 
   const reader = request.body.getReader();
   const chunks = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_TRANSFER_BODY_BYTES) {
-        await reader.cancel();
-        return { error: jsonResponse({ error: "Request body is too large" }, 413) };
-      }
-      chunks.push(value);
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_REQUEST_BODY_BYTES) {
+      await reader.cancel();
+      throw new HttpError(413, "Request body is too large");
     }
-  } catch {
-    return { error: jsonResponse({ error: "Unable to read request body" }, 400) };
+    chunks.push(value);
   }
 
-  const bytes = new Uint8Array(size);
+  const body = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
-    bytes.set(chunk, offset);
+    body.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return body;
+}
 
-  try {
-    return { value: JSON.parse(new TextDecoder().decode(bytes)) };
-  } catch {
-    return { error: jsonResponse({ error: "Invalid JSON body" }, 400) };
+async function listTenants(url, principal, env) {
+  if (!STAFF_ROLES.has(principal.role)) {
+    throw new HttpError(403, "Tenant administration is not allowed");
   }
+  const page = pagination(url);
+  const sql =
+    principal.role === "SUPER_MASTER"
+      ? `SELECT tenant_id, tenant_name, admin_owner_user_id, status, created_at
+         FROM admin_tenants
+         ORDER BY created_at DESC, tenant_id ASC LIMIT ? OFFSET ?`
+      : `SELECT tenant_id, tenant_name, admin_owner_user_id, status, created_at
+         FROM admin_tenants
+         WHERE admin_owner_user_id = ?
+         ORDER BY created_at DESC, tenant_id ASC LIMIT ? OFFSET ?`;
+  const statement = database(env).prepare(sql);
+  const result =
+    principal.role === "SUPER_MASTER"
+      ? await statement.bind(page.limit, page.offset).all()
+      : await statement.bind(principal.userId, page.limit, page.offset).all();
+  if (!Array.isArray(result.results)) {
+    throw new Error("Control database returned an invalid result");
+  }
+  return json({ data: result.results, pagination: page });
 }
 
-function validAmount(value) {
-  if (typeof value !== "string" || !AMOUNT_PATTERN.test(value)) return false;
-  return /[1-9]/.test(value.replace(".", ""));
-}
-
-async function proxyRest(request, env, auth, resource) {
-  const url = new URL(request.url);
-  const upstreamUrl = new URL(`/rest/v1/${resource}${url.search}`, auth.baseUrl);
-  let upstream;
+async function manageTenantStatus(request, tenantId, principal, env) {
+  if (principal.role !== "SUPER_MASTER") {
+    throw new HttpError(403, "Only the Super Master can manage tenants");
+  }
+  if (!ID_PATTERN.test(tenantId)) throw new HttpError(404, "Tenant not found");
+  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
+    throw new HttpError(415, "Content-Type must be application/json");
+  }
+  let body;
   try {
-    upstream = await fetch(upstreamUrl, {
-      method: "GET",
-      headers: {
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${auth.token}`,
-        Accept: request.headers.get("Accept") || "application/json",
-      },
-    });
+    body = await request.json();
   } catch {
-    return jsonResponse({ error: "Database service unavailable" }, 502);
+    throw new HttpError(400, "Invalid JSON body");
+  }
+  if (!body || !STATUSES.has(body.status)) {
+    throw new HttpError(400, "status must be ACTIVE, SUSPENDED, or CLOSED");
   }
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: {
-      "content-type": upstream.headers.get("content-type") || "application/json",
-      "content-range": upstream.headers.get("content-range") || "",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-    },
-  });
+  const result = await database(env)
+    .prepare(
+      `UPDATE admin_tenants
+       SET status = ?, updated_at = unixepoch()
+       WHERE tenant_id = ?`,
+    )
+    .bind(body.status, tenantId)
+    .run();
+  if (result.meta.changes === 0) throw new HttpError(404, "Tenant not found");
+  return json({ data: { tenant_id: tenantId, status: body.status } });
 }
 
-async function createTransfer(request, env, auth) {
-  const bodyResult = await readJsonBody(request);
-  if (bodyResult.error) return bodyResult.error;
-  const body = bodyResult.value;
-  const idempotencyKey = request.headers.get("Idempotency-Key");
-
+async function dispatchTenant(request, url, principal, env) {
+  const routeGroups = [
+    "/api/banking/",
+    "/api/brokerage/",
+    "/api/binary/",
+    "/api/management/",
+  ];
+  if (!routeGroups.some((prefix) => url.pathname.startsWith(prefix))) {
+    throw new HttpError(404, "Not found");
+  }
+  const postPaths = new Set([
+    "/api/banking/transfer",
+    "/api/brokerage/order",
+    "/api/binary/contract",
+    "/api/management/review-action",
+  ]);
   if (
-    !body ||
-    !UUID_PATTERN.test(body.source_account_id || "") ||
-    !UUID_PATTERN.test(body.destination_account_id || "") ||
-    body.source_account_id === body.destination_account_id ||
-    !UUID_PATTERN.test(idempotencyKey || "") ||
-    !validAmount(body.amount)
+    request.method !== "GET" &&
+    !(request.method === "POST" && postPaths.has(url.pathname))
   ) {
-    return jsonResponse(
-      { error: "Provide distinct account IDs, a positive decimal amount, and an Idempotency-Key UUID" },
-      400,
-    );
-  }
-
-  let upstream;
-  try {
-    upstream = await fetch(new URL("/rest/v1/rpc/transfer_between_accounts", auth.baseUrl), {
-      method: "POST",
-      headers: {
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${auth.token}`,
-        "content-type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        p_source_account_id: body.source_account_id,
-        p_destination_account_id: body.destination_account_id,
-        p_amount: body.amount,
-        p_idempotency_key: idempotencyKey,
-      }),
+    throw new HttpError(405, "Method not allowed", {
+      allow: "GET, POST, OPTIONS",
     });
-  } catch {
-    return jsonResponse({ error: "Transfer service unavailable" }, 502);
   }
 
-  if (!upstream.ok) {
-    if (upstream.status === 401 || upstream.status === 403) {
-      return jsonResponse({ error: "Transfer is not authorized" }, upstream.status);
+  let tenantId = principal.tenantId;
+  if (principal.role === "SUPER_MASTER") {
+    tenantId = url.searchParams.get("tenant_id");
+    if (!tenantId || !ID_PATTERN.test(tenantId)) {
+      throw new HttpError(400, "Super Master requests must specify a tenant_id");
     }
-    if (upstream.status < 500) {
-      return jsonResponse({ error: "Transfer rejected; verify account ownership, status, currency, and balance" }, 400);
+  } else {
+    const requestedTenant = url.searchParams.get("tenant_id");
+    if (requestedTenant && requestedTenant !== tenantId) {
+      throw new HttpError(403, "Tenant access denied");
     }
-    return jsonResponse({ error: "Transfer service unavailable" }, 502);
   }
 
-  let transferId;
+  const tenant = await database(env)
+    .prepare(
+      `SELECT tenant_id, status, worker_script_name
+       FROM admin_tenants
+       WHERE tenant_id = ?
+       LIMIT 1`,
+    )
+    .bind(tenantId)
+    .first();
+  if (!tenant) throw new HttpError(404, "Tenant not found");
+  if (tenant.status !== "ACTIVE") throw new HttpError(403, "Tenant is unavailable");
+  if (principal.role === "ADMIN_OWNER" && principal.tenantId !== tenantId) {
+    throw new HttpError(403, "Tenant access denied");
+  }
+  if (
+    MEMBER_ROLES.has(principal.role) &&
+    (principal.tenantId !== tenantId ||
+      (url.searchParams.has("branch_id") &&
+        url.searchParams.get("branch_id") !== principal.branchId))
+  ) {
+    throw new HttpError(403, "Tenant or branch access denied");
+  }
+  if (!env.DISPATCHER || typeof env.DISPATCHER.get !== "function") {
+    throw new HttpError(503, "Tenant dispatch is not configured");
+  }
+
+  const page = pagination(url);
+  const dispatchUrl = new URL(request.url);
+  dispatchUrl.searchParams.delete("tenant_id");
+  dispatchUrl.searchParams.delete("branch_id");
+  dispatchUrl.searchParams.set("limit", String(page.limit));
+  dispatchUrl.searchParams.set("offset", String(page.offset));
+
+  const incomingHeaders = new Headers(request.headers);
+  incomingHeaders.delete("authorization");
+  incomingHeaders.delete("cookie");
+  incomingHeaders.delete("x-platform-user-id");
+  incomingHeaders.delete("x-platform-role");
+  incomingHeaders.delete("x-platform-tenant-id");
+  incomingHeaders.delete("x-platform-branch-id");
+  const forwardedOptions = {
+    method: request.method,
+    headers: incomingHeaders,
+  };
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    forwardedOptions.body = await boundedRequestBody(request);
+  }
+  const forwardedRequest = new Request(dispatchUrl, forwardedOptions);
+
+  let response;
   try {
-    transferId = await upstream.json();
-  } catch {
-    return jsonResponse({ error: "Invalid transfer service response" }, 502);
+    const tenantWorker = env.DISPATCHER.get(tenant.worker_script_name, {
+      props: {
+        userId: principal.userId,
+        role: principal.role,
+        tenantId,
+        branchId: principal.branchId,
+      },
+    });
+    response = await tenantWorker.fetch(forwardedRequest);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "Tenant Worker dispatch failed",
+        tenant_id: tenantId,
+        error_type: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+    throw new HttpError(502, "Tenant service is unavailable");
   }
-  return jsonResponse({ transfer_id: transferId }, 201);
+  return response;
 }
 
-async function marketFeed(request, env, auth) {
-  if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-    return jsonResponse({ error: "WebSocket upgrade required" }, 426);
+async function routeRequest(request, env, cors) {
+  const url = new URL(request.url);
+  if (request.method === "OPTIONS") {
+    if (!cors["access-control-allow-origin"]) {
+      throw new HttpError(403, "A configured browser origin is required");
+    }
+    return new Response(null, { status: 204, headers: cors });
   }
 
-  const gatewayUrl = env.CTRADE_MARKET_GATEWAY_URL;
-  const accessToken = env.CTRADE_ACCESS_TOKEN;
-  const accountId = env.CTRADE_ACCOUNT_ID;
-  const clientId = env.CTRADE_CLIENT_ID;
-  const clientSecret = env.CTRADE_SECRET;
+  if (url.pathname === "/health" && request.method === "GET") {
+    return json({ status: "ok" }, 200, cors);
+  }
+  if (!url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404, cors);
 
-  if (!gatewayUrl || !accessToken || !accountId || !clientId || !clientSecret) {
-    return jsonResponse(
-      { error: "Market feed is disabled until the trusted cTrader market gateway and server-side credentials are configured" },
-      503,
+  const userId = await authenticate(request, env);
+  const principal = await resolvePrincipal(userId, env);
+
+  if (url.pathname === "/api/auth/me") {
+    if (request.method !== "GET") {
+      throw new HttpError(405, "Method not allowed", { allow: "GET, OPTIONS" });
+    }
+    return json(
+      {
+        data: {
+          user_id: principal.userId,
+          role: principal.role,
+          tenant_id: principal.tenantId,
+          branch_id: principal.branchId,
+        },
+      },
+      200,
+      cors,
     );
   }
 
-  let upstreamUrl;
-  try {
-    upstreamUrl = new URL(gatewayUrl);
-  } catch {
-    return jsonResponse({ error: "Invalid cTrader market gateway configuration" }, 503);
-  }
-  if (upstreamUrl.protocol !== "wss:" || upstreamUrl.username || upstreamUrl.password) {
-    return jsonResponse({ error: "The cTrader market gateway must use a credential-free WSS URL" }, 503);
-  }
-
-  let upstream;
-  try {
-    upstream = await fetch(upstreamUrl, {
-      headers: {
-        Upgrade: "websocket",
-        Authorization: `Bearer ${accessToken}`,
-        "x-ctrader-account-id": accountId,
-        "x-ctrader-client-id": clientId,
-        "x-ctrader-client-secret": clientSecret,
-        "x-application-user-id": auth.userId,
-        "x-market-data-only": "true",
-      },
-    });
-  } catch {
-    return jsonResponse({ error: "cTrader market gateway unavailable" }, 502);
-  }
-
-  if (upstream.status !== 101 || !upstream.webSocket) {
-    return jsonResponse({ error: "cTrader market gateway rejected the connection" }, 502);
-  }
-
-  const pair = new WebSocketPair();
-  const [client, server] = Object.values(pair);
-  const upstreamSocket = upstream.webSocket;
-  server.accept({ allowHalfOpen: true });
-  upstreamSocket.accept({ allowHalfOpen: true });
-
-  const forward = (source, destination) => {
-    source.addEventListener("message", (event) => {
-      if (destination.readyState === WebSocket.OPEN) destination.send(event.data);
-    });
-    source.addEventListener("close", (event) => {
-      if (destination.readyState < WebSocket.CLOSING) {
-        destination.close(event.code, event.reason);
-      }
-    });
-    source.addEventListener("error", () => {
-      if (destination.readyState < WebSocket.CLOSING) destination.close(1011, "Market feed error");
-    });
-  };
-
-  forward(upstreamSocket, server);
-  server.addEventListener("message", () => {
-    // The browser receives a read-only feed and cannot send cTrader trading commands.
-    if (server.readyState < WebSocket.CLOSING) server.close(1008, "Market feed is read-only");
-    if (upstreamSocket.readyState < WebSocket.CLOSING) {
-      upstreamSocket.close(1008, "Market feed is read-only");
+  if (url.pathname === "/api/tenants") {
+    if (request.method !== "GET") {
+      throw new HttpError(405, "Tenant provisioning uses the trusted provisioning utility", {
+        allow: "GET, OPTIONS",
+      });
     }
-  });
-  server.addEventListener("close", () => {
-    if (upstreamSocket.readyState < WebSocket.CLOSING) upstreamSocket.close();
-  });
+    return withHeaders(await listTenants(url, principal, env), cors);
+  }
 
-  return new Response(null, { status: 101, webSocket: client });
+  const tenantPath = url.pathname.match(/^\/api\/tenants\/([^/]+)$/);
+  if (tenantPath) {
+    if (request.method !== "PATCH") {
+      throw new HttpError(405, "Method not allowed", { allow: "PATCH, OPTIONS" });
+    }
+    let tenantId;
+    try {
+      tenantId = decodeURIComponent(tenantPath[1]);
+    } catch {
+      throw new HttpError(404, "Tenant not found");
+    }
+    return withHeaders(await manageTenantStatus(request, tenantId, principal, env), cors);
+  }
+
+  const response = await dispatchTenant(request, url, principal, env);
+  return withHeaders(response, cors);
 }
 
 export default {
   async fetch(request, env) {
-    const cors = corsHeaders(request, env);
-    if (cors === null) return jsonResponse({ error: "Origin is not allowed" }, 403);
-
-    const url = new URL(request.url);
-    if (request.method === "OPTIONS") {
-      if (!cors["access-control-allow-origin"]) {
-        return jsonResponse({ error: "A configured browser origin is required" }, 403);
+    let cors = {};
+    try {
+      cors = corsHeaders(request, env);
+      return await routeRequest(request, env, cors);
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return json({ error: error.message }, error.status, { ...cors, ...error.headers });
       }
-      return new Response(null, { status: 204, headers: cors });
+      console.error(
+        JSON.stringify({
+          message: "Unhandled control-plane request failure",
+          path: new URL(request.url).pathname,
+          error_type: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      return json({ error: "Internal server error" }, 500, cors);
     }
-
-    if (url.pathname === "/health" && request.method === "GET") {
-      return withHeaders(jsonResponse({ status: "ok" }), cors);
-    }
-
-    if (!url.pathname.startsWith("/api/")) {
-      return withHeaders(jsonResponse({ error: "Not found" }, 404), cors);
-    }
-
-    const auth = await authenticate(request, env);
-    if (auth.response) return withHeaders(auth.response, cors);
-
-    if (url.pathname === "/api/market-feed" && request.method === "GET") {
-      const response = await marketFeed(request, env, auth);
-      return response.status === 101 ? response : withHeaders(response, cors);
-    }
-
-    if (url.pathname === "/api/transfers" && request.method === "POST") {
-      return withHeaders(await createTransfer(request, env, auth), cors);
-    }
-
-    const resource = url.pathname.match(/^\/api\/([a-z_]+)$/)?.[1];
-    if (request.method === "GET" && resource && REST_RESOURCES.has(resource)) {
-      return withHeaders(await proxyRest(request, env, auth, resource), cors);
-    }
-
-    return withHeaders(jsonResponse({ error: "Not found" }, 404), cors);
   },
 };

@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "metro-platform-gateway",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "CONTROL_DB",
+      "database_name": "REPLACE_WITH_CONTROL_D1_NAME",
+      "database_id": "REPLACE_WITH_CONTROL_D1_UUID"
+    }
+  ],
+  "dispatch_namespaces": [
+    {
+      "binding": "DISPATCHER",
+      "namespace": "REPLACE_WITH_DISPATCH_NAMESPACE"
+    }
+  ],
+  "vars": {
+    "AUTH_JWT_ISSUER": "REPLACE_WITH_IDENTITY_PROVIDER_ISSUER",
+    "AUTH_JWT_AUDIENCE": "REPLACE_WITH_IDENTITY_PROVIDER_AUDIENCE"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
+  }
+}
