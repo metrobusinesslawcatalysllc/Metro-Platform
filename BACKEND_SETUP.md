@@ -49,6 +49,15 @@ npx wrangler secret put AUTH_JWT_SECRET
 npx wrangler deploy
 ```
 
+Wrangler serves the `public/` directory as static assets; `/api/*` requests
+continue through the Worker. The portal directory is [public/index.html](./public/index.html),
+with role portals at [super-master.html](./public/super-master.html),
+[admin-owner.html](./public/admin-owner.html), [client.html](./public/client.html),
+[manager.html](./public/manager.html), and [sub-admin.html](./public/sub-admin.html).
+Each portal accepts a short-lived Bearer JWT issued by the configured identity
+provider and verifies the role through `GET /api/auth/me`. The JWT is kept in
+tab-scoped session storage.
+
 The `DISPATCHER` dispatch namespace binding is the dynamic-routing mechanism:
 the control plane looks up a tenant's trusted `worker_script_name`, then
 `DISPATCHER.get()` invokes that tenant Worker. Each uploaded tenant Worker has

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Metro Platform role-based portals.">
+  <title>Metro Platform Portals</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8edf7;background:#080e18;--panel:#111b2b;--line:#24334a;--muted:#94a3b8;--accent:#a99bff}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 70% -20%,#292453 0,transparent 42%),#080e18;display:grid;place-items:center;padding:22px}.shell{width:min(920px,100%)}.brand{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:800}.title{font-size:clamp(28px,5vw,44px);margin:10px 0}.muted{color:var(--muted);line-height:1.6}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:26px}.card{display:block;color:inherit;text-decoration:none;background:linear-gradient(145deg,#121d2f,#0e1725);border:1px solid var(--line);border-radius:16px;padding:20px;transition:transform .15s,border-color .15s}.card:hover,.card:focus-visible{transform:translateY(-2px);border-color:#6f64b3;outline:none}.card h2{font-size:17px;margin:0 0 8px}.card p{font-size:13px;color:var(--muted);line-height:1.5;margin:0}.tag{display:inline-block;margin-top:16px;color:#c7c0ff;background:#211e3d;padding:5px 8px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.08em}footer{margin-top:24px;color:var(--muted);font-size:11px}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand">Metro Platform</div>
+    <h1 class="title">Choose your portal</h1>
+    <p class="muted">Sign in with an access token issued by the configured identity provider. Portal access and data scope are verified by the Worker gateway.</p>
+    <nav class="grid" aria-label="Platform portals">
+      <a class="card" href="/super-master.html"><h2>Super Master</h2><p>Tenant status administration and trusted onboarding command preparation.</p><span class="tag">SUPER MASTER</span></a>
+      <a class="card" href="/admin-owner.html"><h2>Admin Owner</h2><p>Read-only banking and brokerage data, plus management review actions.</p><span class="tag">ADMIN OWNER</span></a>
+      <a class="card" href="/manager.html"><h2>Manager</h2><p>Review and decide requests in your assigned branch.</p><span class="tag">MANAGER</span></a>
+      <a class="card" href="/sub-admin.html"><h2>Sub-Admin</h2><p>Branch-scoped, read-only account operations.</p><span class="tag">SUBADMIN</span></a>
+      <a class="card" href="/client.html"><h2>Client</h2><p>View your permitted accounts and submit non-executing review requests.</p><span class="tag">CLIENT</span></a>
+    </nav>
+    <footer>Financial requests remain pending until reviewed. An approval does not execute a transfer or trade.</footer>
+  </main>
+</body>
+</html>

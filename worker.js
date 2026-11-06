@@ -138,11 +138,12 @@ function database(env) {
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin");
   if (!origin) return {};
+  const sameOrigin = origin === new URL(request.url).origin;
   const allowedOrigins = (env.ALLOWED_ORIGINS || "")
     .split(",")
     .map((originValue) => originValue.trim())
     .filter(Boolean);
-  if (!allowedOrigins.includes(origin)) {
+  if (!sameOrigin && !allowedOrigins.includes(origin)) {
     throw new HttpError(403, "Origin is not allowed");
   }
   return {
