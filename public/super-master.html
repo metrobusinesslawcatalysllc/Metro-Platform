@@ -40,7 +40,7 @@
           <div class="notice">Tenant creation is intentionally not exposed as a public API. The trusted utility creates the dedicated D1 database and Worker; this form does not create resources or collect Cloudflare credentials.</div>
           <form id="onboard-form" class="form-grid" style="margin-top:16px">
             <div class="field"><label for="tenant-name">Tenant / business name</label><input id="tenant-name" maxlength="120" required autocomplete="organization" placeholder="Example Brokerage"></div>
-            <div class="field"><label for="owner-id">Admin Owner identity-provider user ID</label><input id="owner-id" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:-]{0,127}" required autocomplete="off" placeholder="Exact JWT sub value"></div>
+            <div class="field"><label for="owner-id">Admin Owner identity-provider user ID</label><input id="owner-id" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:\x2d]{0,127}" required autocomplete="off" placeholder="Exact JWT sub value"></div>
             <div class="row"><button id="prepare-command" class="button" type="submit">Prepare onboarding command</button></div>
           </form>
           <div id="command-result" class="hidden" style="margin-top:14px"><p class="muted">Review this command, then run it in the trusted operator environment with the required secrets in the ignored <code>.env</code> file.</p><pre id="command"></pre><button id="copy-command" class="button secondary" type="button">Copy command</button></div>
@@ -130,7 +130,7 @@
           body.append(row);
         }
       };
-      const enterDashboard = async (candidate, base) => {
+      const enterDashboard = async (candidate) => {
         token = candidate;
         const payload = await api("/api/auth/me");
         if (payload.data?.role !== "SUPER_MASTER") throw new Error("This portal requires the SUPER_MASTER role.");
