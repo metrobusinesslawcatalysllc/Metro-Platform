@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "metro-platform-provisioner",
+  "main": "provisioner-worker.js",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": false,
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["tenant-worker.js"],
+      "fallthrough": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "CONTROL_DB",
+      "database_name": "REPLACE_WITH_CONTROL_D1_NAME",
+      "database_id": "REPLACE_WITH_CONTROL_D1_UUID"
+    }
+  ],
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID",
+    "DISPATCH_NAMESPACE": "REPLACE_WITH_DISPATCH_NAMESPACE"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
+  }
+}

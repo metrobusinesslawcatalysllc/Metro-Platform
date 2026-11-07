@@ -1,6 +1,7 @@
 // Control-plane gateway.
 // Bindings: CONTROL_DB (central registry D1), DISPATCHER (Workers for
-// Platforms dispatch namespace), AUTH_JWT_SECRET, AUTH_JWT_ISSUER,
+// Platforms dispatch namespace), PROVISIONER (private provisioning Worker),
+// AUTH_JWT_SECRET, PROVISIONER_SHARED_SECRET, AUTH_JWT_ISSUER,
 // AUTH_JWT_AUDIENCE, and optional comma-separated ALLOWED_ORIGINS.
 // Each tenant's Worker receives only its own tenant D1 binding.
 const HEADERS = {
@@ -14,6 +15,7 @@ const STAFF_ROLES = new Set(["SUPER_MASTER", "ADMIN_OWNER"]);
 const MEMBER_ROLES = new Set(["SUBADMIN", "MANAGER", "CLIENT"]);
 const STATUSES = new Set(["ACTIVE", "SUSPENDED", "CLOSED"]);
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const USER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_`{|}~@:-]{0,127}$/;
 const MAX_LIMIT = 100;
 const MAX_OFFSET = 10000;
 const MAX_REQUEST_BODY_BYTES = 8192;
@@ -38,6 +40,12 @@ function decodeBase64Url(value) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const decoded = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+
+function encodeBase64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function decodeJwtPart(value) {
@@ -84,7 +92,7 @@ async function authenticate(request, env) {
     !claims ||
     typeof claims !== "object" ||
     typeof claims.sub !== "string" ||
-    !ID_PATTERN.test(claims.sub) ||
+    !USER_ID_PATTERN.test(claims.sub) ||
     claims.iss !== env.AUTH_JWT_ISSUER ||
     !(claims.aud === env.AUTH_JWT_AUDIENCE ||
       (Array.isArray(claims.aud) && claims.aud.includes(env.AUTH_JWT_AUDIENCE))) ||
@@ -341,6 +349,134 @@ async function manageTenantStatus(request, tenantId, principal, env) {
   return json({ data: { tenant_id: tenantId, status: body.status } });
 }
 
+function validateProvisioningPayload(payload) {
+  const emailPattern =
+    /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new HttpError(400, "Invalid provisioning payload");
+  }
+  const brokerName =
+    typeof payload.broker_name === "string" ? payload.broker_name.trim() : "";
+  const adminEmail =
+    typeof payload.admin_email === "string" ? payload.admin_email.trim() : "";
+  if (typeof brokerName !== "string" || brokerName.length < 1 || brokerName.length > 120) {
+    throw new HttpError(400, "broker_name must be 1-120 characters");
+  }
+  if (
+    typeof adminEmail !== "string" ||
+    adminEmail.length > 128 ||
+    !emailPattern.test(adminEmail) ||
+    !USER_ID_PATTERN.test(adminEmail)
+  ) {
+    throw new HttpError(400, "admin_email must be a valid email address");
+  }
+  if (!Number.isSafeInteger(payload.risk_limit_minor) || payload.risk_limit_minor < 1) {
+    throw new HttpError(400, "risk_limit_minor must be a positive safe integer");
+  }
+  if (
+    !Number.isSafeInteger(payload.fee_basis_points) ||
+    payload.fee_basis_points < 0 ||
+    payload.fee_basis_points > 10000
+  ) {
+    throw new HttpError(400, "fee_basis_points must be 0-10000");
+  }
+  return { brokerName, adminEmail };
+}
+
+async function createTenant(request, principal, env) {
+  if (principal.role !== "SUPER_MASTER") {
+    throw new HttpError(403, "Only the Super Master can provision tenants");
+  }
+  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
+    throw new HttpError(415, "Content-Type must be application/json");
+  }
+
+  const bodyBytes = await boundedRequestBody(request);
+  if (!bodyBytes) throw new HttpError(400, "A JSON request body is required");
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes));
+  } catch {
+    throw new HttpError(400, "Invalid JSON request body");
+  }
+  const { brokerName, adminEmail } = validateProvisioningPayload(payload);
+  if (!env.PROVISIONER || typeof env.PROVISIONER.fetch !== "function") {
+    throw new HttpError(503, "Tenant provisioning service is not configured");
+  }
+  if (
+    typeof env.PROVISIONER_SHARED_SECRET !== "string" ||
+    new TextEncoder().encode(env.PROVISIONER_SHARED_SECRET).byteLength < 32
+  ) {
+    throw new HttpError(503, "Tenant provisioning service is not configured");
+  }
+
+  const internalBody = JSON.stringify({
+    broker_name: brokerName,
+    admin_email: adminEmail,
+    risk_limit_minor: payload.risk_limit_minor,
+    fee_basis_points: payload.fee_basis_points,
+    super_master_user_id: principal.userId,
+  });
+  const timestamp = String(Date.now());
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.PROVISIONER_SHARED_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = encodeBase64Url(
+    new Uint8Array(
+      await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(`${timestamp}.${internalBody}`),
+      ),
+    ),
+  );
+
+  let response;
+  try {
+    response = await env.PROVISIONER.fetch(
+      new Request("https://provisioner/provision", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-provisioner-timestamp": timestamp,
+          "x-provisioner-signature": signature,
+        },
+        body: internalBody,
+      }),
+    );
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "Tenant provisioner service call failed",
+      error_type: error instanceof Error ? error.name : "UnknownError",
+    }));
+    throw new HttpError(502, "Tenant provisioning service is unavailable");
+  }
+
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new HttpError(502, "Tenant provisioning service returned an invalid response");
+  }
+  if (!response.ok) {
+    const status = [400, 403, 409, 413, 415].includes(response.status)
+      ? response.status
+      : 502;
+    throw new HttpError(
+      status,
+      typeof result.error === "string" ? result.error : "Tenant provisioning failed",
+    );
+  }
+  if (!result.data || typeof result.data.tenant_id !== "string") {
+    throw new HttpError(502, "Tenant provisioning service returned an invalid response");
+  }
+  return json({ data: result.data }, response.status);
+}
+
 async function dispatchTenant(request, url, principal, env) {
   const routeGroups = [
     "/api/banking/",
@@ -488,12 +624,13 @@ async function routeRequest(request, env, cors) {
   }
 
   if (url.pathname === "/api/tenants") {
-    if (request.method !== "GET") {
-      throw new HttpError(405, "Tenant provisioning uses the trusted provisioning utility", {
-        allow: "GET, OPTIONS",
-      });
+    if (request.method === "GET") {
+      return withHeaders(await listTenants(url, principal, env), cors);
     }
-    return withHeaders(await listTenants(url, principal, env), cors);
+    if (request.method === "POST") {
+      return withHeaders(await createTenant(request, principal, env), cors);
+    }
+    throw new HttpError(405, "Method not allowed", { allow: "GET, POST, OPTIONS" });
   }
 
   const tenantPath = url.pathname.match(/^\/api\/tenants\/([^/]+)$/);

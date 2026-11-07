@@ -36,10 +36,10 @@
     (() => {
       "use strict";
       const $ = (s) => document.querySelector(s), key = "metro.admin-owner.token";
-      let token = "", base = location.origin;
+      let token = "";
       const status = (el, text, type = "") => { el.textContent = text; el.className = `status ${type}`; };
       const api = async (path, options = {}) => {
-        const response = await fetch(`${base}${path}`, { ...options, headers: { authorization: `Bearer ${token}`, ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers } });
+        const response = await fetch(path, { ...options, headers: { authorization: `Bearer ${token}`, ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers } });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
         return body;

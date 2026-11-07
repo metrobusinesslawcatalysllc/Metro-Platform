@@ -29,25 +29,58 @@ tenant claims supplied by a client.
 ## 2. Configure and deploy the gateway
 
 Set the real D1 database ID, dispatch namespace name, and identity-provider
-issuer/audience in [wrangler.jsonc](./wrangler.jsonc), then deploy
-[worker.js](./worker.js). The gateway configuration includes:
+issuer/audience in [wrangler.jsonc](./wrangler.jsonc), and the matching control
+D1 ID, Cloudflare account ID, and dispatch namespace in
+[wrangler.provisioner.jsonc](./wrangler.provisioner.jsonc). The gateway
+configuration includes:
 
 | Name | Type | Purpose |
 | --- | --- | --- |
 | `CONTROL_DB` | D1 binding | The control-plane database |
 | `DISPATCHER` | Workers for Platforms dispatch namespace | Invokes tenant Workers |
+| `PROVISIONER` | Private Worker service binding | Provisions isolated tenant databases and Workers |
 | `AUTH_JWT_SECRET` | Secret | HS256 verification key; at least 32 UTF-8 bytes |
 | `AUTH_JWT_ISSUER` | Variable | Expected JWT `iss` |
 | `AUTH_JWT_AUDIENCE` | Variable | Expected JWT `aud` |
 | `ALLOWED_ORIGINS` | Variable, optional | Comma-separated exact browser origins |
 
-Replace the `REPLACE_WITH_*` values in `wrangler.jsonc` before deploying, then
-set the signing secret without adding it to the configuration file:
+Replace the `REPLACE_WITH_*` values in both Wrangler configurations. Deploy the
+private provisioner before the gateway so the service binding target exists.
+After each Worker is deployed, add its secrets without adding them to a
+configuration file:
 
 ```powershell
-npx wrangler secret put AUTH_JWT_SECRET
+npx wrangler deploy --config .\wrangler.provisioner.jsonc
+npx wrangler secret put CLOUDFLARE_API_TOKEN --config .\wrangler.provisioner.jsonc
+npx wrangler secret put PROVISIONER_SHARED_SECRET --config .\wrangler.provisioner.jsonc
 npx wrangler deploy
+npx wrangler secret put AUTH_JWT_SECRET
+npx wrangler secret put PROVISIONER_SHARED_SECRET
 ```
+
+### Configure the private tenant provisioner
+
+The Super Master dashboard calls `POST /api/tenants`. The gateway authorizes
+the caller, then signs an internal request to the separate provisioner Worker
+through a private service binding. The provisioner has no public route and
+holds the Cloudflare API token; that token is never sent to the browser or
+gateway.
+
+Set the control database name and ID, Cloudflare account ID, and dispatch
+namespace in [wrangler.provisioner.jsonc](./wrangler.provisioner.jsonc). Create
+a Cloudflare API token with D1 write access and permission to upload/delete
+Workers for Platforms dispatch scripts.
+
+Use the same randomly generated secret value for `PROVISIONER_SHARED_SECRET`
+on both Workers; enter it through Wrangler's protected prompt. Keep
+`workers_dev` disabled for the provisioner and do not add a public route. The
+dashboard submits `broker_name`, `admin_email`, `risk_limit_minor`, and
+`fee_basis_points`. The Admin Email must exactly match the Admin Owner's JWT
+`sub`; provision that identity with the identity provider separately. Risk and
+fee values are stored in the dedicated tenant's `tenant_metadata` only. The
+current queue-only platform does not enforce them or execute financial actions.
+After success, the dashboard displays same-origin links to the Admin Owner and
+Client portal pages.
 
 Wrangler serves the `public/` directory as static assets; `/api/*` requests
 continue through the Worker. The portal directory is [public/index.html](./public/index.html),
@@ -102,12 +135,14 @@ request has an uncertain outcome, it retains resources and reports the IDs so
 an operator can reconcile them safely instead of deleting a possibly active
 tenant's infrastructure.
 
-Tenant provisioning remains in this separate trusted operator utility; the
-public gateway does not accept Cloudflare API credentials or create D1
-databases. Its `/api/tenants` and `/api/tenants/:tenant_id` routes are for
-authorized tenant listing and Super Master status changes only. Banking,
-brokerage, binary, and management requests use separate `/api/{domain}/*`
-routes and are dispatched only after tenant authorization.
+Tenant provisioning is available only through the Super Master-authorized
+`POST /api/tenants` route, which delegates to the private provisioner service.
+The public gateway does not accept Cloudflare API credentials or directly
+create D1 databases. `GET /api/tenants` lists tenants and
+`PATCH /api/tenants/:tenant_id` changes status. Banking, brokerage, binary, and
+management requests use separate `/api/{domain}/*` routes and are dispatched
+only after tenant authorization. The trusted [provision-tenant.mjs](./provision-tenant.mjs)
+utility remains available for operator-driven provisioning.
 
 After provisioning, an operator still needs a controlled process to create
 tenant branches, memberships, and client account grants in the control and
