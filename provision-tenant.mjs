@@ -262,12 +262,8 @@ async function main() {
     `SELECT user_id
      FROM platform_operators
      WHERE user_id = ?
-     UNION ALL
-     SELECT user_id
-     FROM tenant_memberships
-     WHERE user_id = ?
      LIMIT 1`,
-    [ownerUserId, ownerUserId],
+    [ownerUserId],
   );
   if (ownerResult.results?.length) {
     throw new Error("Admin Owner already exists in the control database");

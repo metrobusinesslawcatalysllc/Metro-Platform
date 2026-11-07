@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Owner Portal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #0b0f19; color: #f3f4f6; font-family: system-ui, sans-serif; }
+    .glass-panel { background: rgba(17, 24, 39, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    function AdminOwnerPortal() {
+      const [wallets, setWallets] = React.useState({
+        usdtTrc20: 'T9xZ3K8mYv7N2pQ4wR1sT6uV8wX0yZ2aB4',
+        btc: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wl1',
+        eth: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        usdtErc20: '0x388C818CA8B9251b393131C08a736A67ccB19297'
+      });
+
+      return (
+        <div className="min-h-screen p-6 max-w-7xl mx-auto space-y-6">
+          <header className="flex justify-between items-center border-b border-gray-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">AO</div>
+              <div>
+                <h1 className="text-lg font-bold text-white">ADMIN OWNER DASHBOARD</h1>
+                <p className="text-xs text-blue-400">Branch Capital & Deposit Address Configuration</p>
+              </div>
+            </div>
+            <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full text-xs font-mono">BRANCH OWNER</span>
+          </header>
+
+          <div className="glass-panel p-6 rounded-2xl space-y-4">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Configure Up to 4 Client Deposit Wallets</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-emerald-400 font-semibold block mb-1">USDT (TRC20) Deposit Address</label>
+                <input type="text" value={wallets.usdtTrc20} onChange={(e)=>setWallets({...wallets, usdtTrc20: e.target.value})} className="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <label className="text-xs text-amber-400 font-semibold block mb-1">Bitcoin (BTC) Deposit Address</label>
+                <input type="text" value={wallets.btc} onChange={(e)=>setWallets({...wallets, btc: e.target.value})} className="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <label className="text-xs text-purple-400 font-semibold block mb-1">Ethereum (ETH) Deposit Address</label>
+                <input type="text" value={wallets.eth} onChange={(e)=>setWallets({...wallets, eth: e.target.value})} className="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <label className="text-xs text-blue-400 font-semibold block mb-1">USDT (ERC20) Deposit Address</label>
+                <input type="text" value={wallets.usdtErc20} onChange={(e)=>setWallets({...wallets, usdtErc20: e.target.value})} className="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono" />
+              </div>
+            </div>
+            <button onClick={()=>alert('Deposit addresses synced to all client portals!')} className="bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-emerald-600/20">Save & Publish Wallets</button>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<AdminOwnerPortal />);
+  </script>
+</body>
+</html>

@@ -16,7 +16,6 @@ const MAX_LIMIT = 100;
 const MAX_OFFSET = 10000;
 const MAX_BODY_BYTES = 8192;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const USER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MANAGEMENT_ROLES = new Set(["SUPER_MASTER", "ADMIN_OWNER", "MANAGER"]);
 
@@ -104,7 +103,7 @@ function validateContext(props, env) {
     !props ||
     typeof props !== "object" ||
     typeof props.userId !== "string" ||
-    !USER_ID_PATTERN.test(props.userId) ||
+    !ID_PATTERN.test(props.userId) ||
     !ROLES.has(props.role) ||
     typeof props.tenantId !== "string" ||
     !ID_PATTERN.test(props.tenantId) ||

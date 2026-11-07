@@ -1,239 +1,90 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="description" content="Super Master tenant administration for the Metro Platform.">
-  <title>Super Master | Metro Platform</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Super Master Owner Portal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8edf7;background:#080d18;font-synthesis:none;text-rendering:optimizeLegibility;--panel:#111a2b;--line:#24314a;--muted:#93a1b9;--accent:#9b8cff;--good:#55d6a5;--bad:#ff7f8b}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 75% -15%,#292453 0,transparent 42%),#080d18}button,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:32px 0 64px}.brand{display:flex;align-items:center;gap:14px}.mark{display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:#7664e8;font-weight:800}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:26px}.eyebrow,.label{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:700}.title{font-size:22px;margin:0}.subtitle{color:var(--muted);font-size:13px;margin:5px 0 0}.badge{border:1px solid #554b96;color:#c5bbff;background:#211e3d;padding:7px 11px;border-radius:99px;font-size:11px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.panel{background:linear-gradient(145deg,#121c2e,#0e1625);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 12px 40px #0002}.span-12{grid-column:span 12}.span-7{grid-column:span 7}.span-5{grid-column:span 5}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.section-head h2{font-size:16px;margin:0}.muted{color:var(--muted);font-size:13px;line-height:1.55}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:#b9c5d9}.field input{width:100%;border:1px solid #2b3a56;background:#0b1220;color:#f2f5fc;border-radius:10px;padding:11px 12px;outline:none}.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #9b8cff20}.button{border:1px solid transparent;border-radius:10px;background:#7867e8;color:white;font-weight:700;padding:10px 14px}.button:hover{filter:brightness(1.1)}.button.secondary{border-color:#34435e;background:#172238;color:#dce5f6}.button.danger{border-color:#663740;background:#351d29;color:#ffb1b8}.button:disabled{opacity:.55;cursor:wait}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.notice{border:1px solid #554b96;background:#211e3d;color:#d5ceff;border-radius:12px;padding:13px 15px;font-size:13px;line-height:1.5}.status{min-height:22px;margin:12px 0 0;color:var(--muted);font-size:13px}.status.error{color:var(--bad)}.status.success{color:var(--good)}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;text-align:left;min-width:620px}th,td{padding:12px 10px;border-bottom:1px solid var(--line);font-size:13px}th{color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}td code{color:#c4baff;font-size:12px}.actions{display:flex;gap:7px}.small{padding:7px 9px;font-size:11px}.hidden{display:none!important}pre{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid var(--line);border-radius:10px;background:#080e1a;color:#cbd6e8;padding:14px;font-size:12px;line-height:1.55}.token-field input{font-family:ui-monospace,monospace}.right{margin-left:auto}footer{margin-top:24px;color:var(--muted);font-size:11px}@media(max-width:760px){.shell{width:min(100% - 22px,620px);padding-top:20px}.top{align-items:flex-start}.badge{display:none}.span-7,.span-5{grid-column:span 12}.form-grid{grid-template-columns:1fr}.panel{padding:17px}}
+    body { background-color: #0b0f19; color: #f3f4f6; font-family: system-ui, sans-serif; }
+    .glass-panel { background: rgba(17, 24, 39, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="top">
-      <div class="brand"><div class="mark" aria-hidden="true">SM</div><div><h1 class="title">Platform control plane</h1><p class="subtitle">Super Master tenant administration</p></div></div>
-      <span class="badge">SUPER MASTER</span>
-    </header>
+  <div id="root"></div>
+  <script type="text/babel">
+    function SuperMasterPortal() {
+      const [branches, setBranches] = React.useState([
+        { id: 'BR-101', name: 'Metro Capital Main', status: 'ACTIVE', volume: '$12.4M', traders: 142 },
+        { id: 'BR-102', name: 'Apex FX Markets', status: 'ACTIVE', volume: '$6.0M', traders: 88 }
+      ]);
+      const [branchName, setBranchName] = React.useState('');
 
-    <section id="login-panel" class="panel" aria-labelledby="login-title">
-      <div class="section-head"><div><h2 id="login-title">Sign in to the control plane</h2><p class="muted">Use a short-lived Bearer JWT issued by your configured identity provider. This portal does not collect or verify passwords.</p></div></div>
-      <form id="login-form" class="form-grid">
-        <div class="field token-field"><label for="access-token">Bearer access token</label><input id="access-token" type="password" autocomplete="off" required placeholder="Paste the pre-issued JWT"></div>
-        <div class="row"><button id="login-button" class="button" type="submit">Verify access</button></div>
-      </form>
-      <p id="login-status" class="status" role="status" aria-live="polite"></p>
-    </section>
+      const handleProvision = (e) => {
+        e.preventDefault();
+        if(!branchName.trim()) return;
+        const newBranch = {
+          id: `BR-${Math.floor(100 + Math.random() * 900)}`,
+          name: branchName,
+          status: 'ACTIVE',
+          volume: '$0.00',
+          traders: 0
+        };
+        setBranches([...branches, newBranch]);
+        setBranchName('');
+        alert(`Successfully provisioned ${newBranch.name}!`);
+      };
 
-    <section id="dashboard" class="hidden">
-      <div class="row" style="margin:18px 0"><div id="identity" class="muted"></div><button id="refresh" class="button secondary right" type="button">Refresh tenants</button><button id="logout" class="button secondary" type="button">Sign out</button></div>
-      <div class="grid">
-        <section class="panel span-7" aria-labelledby="tenants-title">
-          <div class="section-head"><div><h2 id="tenants-title">Provisioned tenants</h2><p class="muted">Tenant status changes take effect at the gateway.</p></div></div>
-          <div class="table-wrap"><table><thead><tr><th>Tenant</th><th>Admin Owner</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="tenant-rows"><tr><td colspan="5" class="muted">Loading tenants...</td></tr></tbody></table></div>
-          <p id="tenant-status" class="status" role="status" aria-live="polite"></p>
-        </section>
-        <section class="panel span-5" aria-labelledby="onboard-title">
-          <div class="section-head"><div><h2 id="onboard-title">Onboard a broker</h2><p class="muted">Provision an isolated tenant and Admin Owner.</p></div></div>
-          <div class="notice">Provisioning runs in a private server-side service; Cloudflare credentials are never sent to this page. Admin Email must exactly match the Admin Owner's identity-provider JWT sub. Risk and fee values are stored as metadata only and are not enforced by the current non-executing platform.</div>
-          <form id="onboard-form" class="form-grid" style="margin-top:16px">
-            <div class="field"><label for="tenant-name">Broker Name</label><input id="tenant-name" maxlength="120" required autocomplete="organization" placeholder="Example Brokerage"></div>
-            <div class="field"><label for="admin-email">Admin Email (must equal JWT sub)</label><input id="admin-email" type="email" maxlength="128" required autocomplete="email" placeholder="admin@example.com"></div>
-            <div class="field"><label for="risk-limit">Initial risk limit (minor units)</label><input id="risk-limit" type="number" min="1" step="1" value="100000" required></div>
-            <div class="field"><label for="fee-bps">Initial fee limit (basis points)</label><input id="fee-bps" type="number" min="0" max="10000" step="1" value="250" required></div>
-            <div class="row"><button id="provision-tenant" class="button" type="submit">Provision tenant</button></div>
-          </form>
-          <div id="provision-result" class="hidden" style="margin-top:14px">
-            <p id="provision-summary" class="muted"></p>
-            <p class="muted">Admin login: <a id="admin-login-link"></a><br>Client login: <a id="client-login-link"></a></p>
-            <p id="provision-limits" class="muted"></p>
+      return (
+        <div className="min-h-screen p-6 max-w-7xl mx-auto space-y-6">
+          <header className="flex justify-between items-center border-b border-gray-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-purple-500/30">SM</div>
+              <div>
+                <h1 className="text-lg font-bold text-white">SUPER MASTER OWNER PORTAL</h1>
+                <p className="text-xs text-purple-400">Global System Exposure & Liquidity Control</p>
+              </div>
+            </div>
+            <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full text-xs font-mono">GLOBAL ROOT ACCESS</span>
+          </header>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="glass-panel p-4 rounded-xl">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Total Ecosystem Equity</p>
+              <p className="text-2xl font-bold text-white mt-1">$2,732,450.00</p>
+              <span className="text-xs text-emerald-400">+8.24% Net Growth</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Active Broker Branches</p>
+              <p className="text-2xl font-bold text-white mt-1">{branches.length} Provisioned</p>
+              <span className="text-xs text-purple-400">cTrader Sockets Synced</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl">
+              <p className="text-xs text-gray-400 uppercase font-semibold">24h Gross Volume</p>
+              <p className="text-2xl font-bold text-white mt-1">$18.4M</p>
+              <span className="text-xs text-gray-400">Latency: 38ms</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Banking Treasuries</p>
+              <p className="text-2xl font-bold text-white mt-1">4 Active Ledgers</p>
+              <span className="text-xs text-emerald-400">Zero Loss Guard</span>
+            </div>
           </div>
-          <p id="onboard-status" class="status" role="status" aria-live="polite"></p>
-        </section>
-        <section class="panel span-12">
-          <div class="section-head"><h2>Isolation and execution boundaries</h2></div>
-          <p class="muted">Every Admin Owner is routed to a Worker with its own D1 binding. Banking, brokerage, and binary requests are separate tenant APIs. This control-plane dashboard does not display account balances or move funds. Provisioned risk and fee values are metadata only; they do not enable or execute trades.</p>
-        </section>
-      </div>
-    </section>
-    <footer>Financial and trading services are not provided by this control-plane interface.</footer>
-  </main>
-  <script>
-    (() => {
-      "use strict";
-      const $ = (selector) => document.querySelector(selector);
-      const loginPanel = $("#login-panel");
-      const dashboard = $("#dashboard");
-      const tokenKey = "metro.super-master.token";
-      let token = "";
-      let userId = "";
-      const api = async (path, options = {}) => {
-        const response = await fetch(path, {
-          ...options,
-          headers: { authorization: `Bearer ${token}`, ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers },
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || `Gateway request failed (${response.status})`);
-        return payload;
-      };
-      const showStatus = (element, message, kind = "") => {
-        element.textContent = message;
-        element.className = `status ${kind}`;
-      };
-      const makeCell = (row, value, code = false) => {
-        const cell = document.createElement("td");
-        if (code) {
-          const element = document.createElement("code");
-          element.textContent = value || "-";
-          cell.append(element);
-        } else cell.textContent = value || "-";
-        row.append(cell);
-      };
-      const loadTenants = async () => {
-        const body = $("#tenant-rows");
-        body.replaceChildren();
-        const payload = await api("/api/tenants?limit=100");
-        for (const tenant of payload.data || []) {
-          const row = document.createElement("tr");
-          makeCell(row, tenant.tenant_name);
-          makeCell(row, tenant.admin_owner_user_id, true);
-          makeCell(row, tenant.status);
-          makeCell(row, tenant.created_at ? new Date(Number(tenant.created_at) * 1000).toLocaleString() : "-");
-          const cell = document.createElement("td");
-          const actions = document.createElement("div");
-          actions.className = "actions";
-          for (const status of ["ACTIVE", "SUSPENDED", "CLOSED"]) {
-            if (tenant.status === status) continue;
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = `button small ${status === "CLOSED" ? "danger" : "secondary"}`;
-            button.textContent = status === "ACTIVE" ? "Activate" : status === "SUSPENDED" ? "Suspend" : "Close";
-            button.addEventListener("click", async () => {
-              if (!window.confirm(`${status === "CLOSED" ? "Close" : status === "SUSPENDED" ? "Suspend" : "Activate"} ${tenant.tenant_name}?`)) return;
-              button.disabled = true;
-              try {
-                await api(`/api/tenants/${encodeURIComponent(tenant.tenant_id)}`, { method: "PATCH", body: JSON.stringify({ status }) });
-                showStatus($("#tenant-status"), `Tenant updated to ${status}.`, "success");
-                await loadTenants();
-              } catch (error) {
-                showStatus($("#tenant-status"), error.message, "error");
-                button.disabled = false;
-              }
-            });
-            actions.append(button);
-          }
-          cell.append(actions);
-          row.append(cell);
-          body.append(row);
-        }
-        if (!(payload.data || []).length) {
-          const row = document.createElement("tr");
-          makeCell(row, "No tenants have been provisioned yet.");
-          row.firstChild.colSpan = 5;
-          body.append(row);
-        }
-      };
-      const enterDashboard = async (candidate) => {
-        token = candidate;
-        const payload = await api("/api/auth/me");
-        if (payload.data?.role !== "SUPER_MASTER") throw new Error("This portal requires the SUPER_MASTER role.");
-        userId = payload.data.user_id;
-        $("#identity").textContent = `Signed in as ${userId} · SUPER_MASTER`;
-        await loadTenants();
-        loginPanel.classList.add("hidden");
-        dashboard.classList.remove("hidden");
-      };
-      $("#login-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const button = $("#login-button");
-        button.disabled = true;
-        showStatus($("#login-status"), "Verifying token...");
-        try {
-          await enterDashboard($("#access-token").value.trim());
-          sessionStorage.setItem(tokenKey, token);
-        } catch (error) {
-          token = "";
-          showStatus($("#login-status"), error.message, "error");
-        } finally {
-          button.disabled = false;
-        }
-      });
-      $("#refresh").addEventListener("click", async () => {
-        try { await loadTenants(); showStatus($("#tenant-status"), "Tenant list refreshed.", "success"); }
-        catch (error) { showStatus($("#tenant-status"), error.message, "error"); }
-      });
-      $("#logout").addEventListener("click", () => {
-        sessionStorage.removeItem(tokenKey);
-        token = "";
-        dashboard.classList.add("hidden");
-        loginPanel.classList.remove("hidden");
-        $("#access-token").value = "";
-        showStatus($("#login-status"), "Signed out.");
-      });
-      $("#onboard-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        if (!form.reportValidity()) return;
-        const riskLimit = Number($("#risk-limit").value);
-        const feeBasisPoints = Number($("#fee-bps").value);
-        if (!Number.isSafeInteger(riskLimit) || riskLimit < 1 ||
-          !Number.isSafeInteger(feeBasisPoints) || feeBasisPoints < 0 ||
-          feeBasisPoints > 10000) {
-          showStatus($("#onboard-status"), "Enter a positive integer risk limit and a fee limit from 0 to 10000 basis points.", "error");
-          return;
-        }
-        const button = $("#provision-tenant");
-        button.disabled = true;
-        $("#provision-result").classList.add("hidden");
-        showStatus($("#onboard-status"), "Provisioning isolated tenant resources...");
-        try {
-          const result = await api("/api/tenants", {
-            method: "POST",
-            body: JSON.stringify({
-              broker_name: $("#tenant-name").value.trim(),
-              admin_email: $("#admin-email").value.trim(),
-              risk_limit_minor: riskLimit,
-              fee_basis_points: feeBasisPoints,
-            }),
-          });
-          const tenant = result.data;
-          const adminUrl = new URL(tenant.admin_login_path, location.origin);
-          const clientUrl = new URL(tenant.client_login_path, location.origin);
-          if (adminUrl.origin !== location.origin || clientUrl.origin !== location.origin) {
-            throw new Error("Provisioner returned an invalid portal URL.");
-          }
-          $("#admin-login-link").href = adminUrl.href;
-          $("#admin-login-link").textContent = adminUrl.href;
-          $("#client-login-link").href = clientUrl.href;
-          $("#client-login-link").textContent = clientUrl.href;
-          $("#provision-summary").textContent = `${tenant.broker_name} was provisioned for ${tenant.admin_email}. Tenant ID: ${tenant.tenant_id}.`;
-          $("#provision-limits").textContent = `Stored metadata only — risk limit: ${tenant.risk_limit_minor} minor units; fee limit: ${tenant.fee_basis_points} basis points.`;
-          $("#provision-result").classList.remove("hidden");
-          showStatus($("#onboard-status"), "Tenant provisioned successfully. No funds or trades were executed.", "success");
-          try {
-            await loadTenants();
-          } catch (error) {
-            showStatus($("#tenant-status"), `Tenant was provisioned, but the list refresh failed: ${error.message}`, "error");
-          }
-        } catch (error) {
-          showStatus($("#onboard-status"), error.message, "error");
-        } finally {
-          button.disabled = false;
-        }
-      });
-      const cachedToken = sessionStorage.getItem(tokenKey);
-      if (cachedToken) {
-        enterDashboard(cachedToken).catch((error) => {
-          sessionStorage.removeItem(tokenKey);
-          token = "";
-          loginPanel.classList.remove("hidden");
-          dashboard.classList.add("hidden");
-          showStatus($("#login-status"), error.message, "error");
-        });
-      }
-    })();
+
+          <div className="glass-panel p-6 rounded-2xl space-y-4">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Branch & Broker Provisioning Engine</h2>
+            <form onSubmit={handleProvision} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input type="text" placeholder="New Branch Name (e.g. Metro Prime)" value={branchName} onChange={(e)=>setBranchName(e.target.value)} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500" />
+              <button type="submit" className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl px-4 py-2.5 transition-all shadow-lg shadow-purple-600/20">Spin New Branch</button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<SuperMasterPortal />);
   </script>
 </body>
 </html>

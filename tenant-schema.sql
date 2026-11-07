@@ -1,5 +1,5 @@
 -- Apply once to each tenant's dedicated D1 database.
--- tenant_metadata is seeded by the trusted provisioning workflows. Records are
+-- tenant_metadata is seeded by provision-tenant.mjs. Financial records are
 -- physically isolated by the tenant-specific Worker D1 binding.
 -- Store money in integer minor units, never SQLite REAL.
 
@@ -9,10 +9,6 @@ CREATE TABLE tenant_metadata (
     CHECK (elevated_review_threshold_minor > 0),
   elevated_review_currency TEXT NOT NULL DEFAULT 'USD'
     CHECK (elevated_review_currency GLOB '[A-Z][A-Z][A-Z]'),
-  risk_limit_minor INTEGER NOT NULL DEFAULT 100000
-    CHECK (risk_limit_minor > 0),
-  fee_basis_points INTEGER NOT NULL DEFAULT 250
-    CHECK (fee_basis_points BETWEEN 0 AND 10000),
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
